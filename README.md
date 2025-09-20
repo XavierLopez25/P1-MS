@@ -217,21 +217,11 @@ python -c "import sys; print(sys.path)"
 - Usar menos `num_runs`
 - Para problemas >300 ciudades, considerar implementación optimizada
 
-## Contribución
-
-Este proyecto es parte de una tarea académica. Para mejoras:
-
-1. Fork del repositorio
-2. Crear branch para nueva feature
-3. Implementar mejora
-4. Documentar cambios
-5. Pull request con descripción detallada
-
 ## Autor
 
-**Proyecto**: Algoritmos Genéticos + LP para TSP
-**Curso**: Métodos de Solución
-**Fecha**: Octubre 2024
+**Proyecto**: Proyecto 1
+**Curso**: Modelación y Simulación
+**Fecha**: Octubre 2025
 
 ## Referencias
 
