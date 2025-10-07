@@ -1,7 +1,8 @@
 import numpy as np
 import random
 import time
-from typing import List, Dict, Tuple, Optional
+import matplotlib.pyplot as plt
+from typing import List, Dict, Tuple, Optional, Callable
 from operators import GeneticOperators
 
 class GeneticAlgorithmTSP:
@@ -16,7 +17,8 @@ class GeneticAlgorithmTSP:
                  max_generations: int = 1000,
                  tournament_size: int = 3,
                  mutation_type: str = '2opt',
-                 convergence_threshold: int = 100):
+                 convergence_threshold: int = 100,
+                 coordinates: Optional[List] = None):
         """
         Initialize the Genetic Algorithm
 
@@ -30,6 +32,7 @@ class GeneticAlgorithmTSP:
             tournament_size: Size of tournament for selection
             mutation_type: Type of mutation ('2opt', 'swap', 'inversion')
             convergence_threshold: Generations without improvement to stop
+            coordinates: City coordinates for visualization
         """
         self.distance_matrix = distance_matrix
         self.num_cities = len(distance_matrix)
@@ -41,10 +44,12 @@ class GeneticAlgorithmTSP:
         self.tournament_size = tournament_size
         self.mutation_type = mutation_type
         self.convergence_threshold = convergence_threshold
+        self.coordinates = coordinates
 
         # Statistics tracking
         self.best_fitness_history = []
         self.avg_fitness_history = []
+        self.best_tour_history = []  # Track best tour per generation
         self.best_tour = None
         self.best_fitness = float('inf')
         self.generation_count = 0
@@ -53,17 +58,33 @@ class GeneticAlgorithmTSP:
         # Operators
         self.operators = GeneticOperators()
 
-    def run(self, verbose: bool = True) -> Dict:
+        # Visualization setup
+        self.real_time_viz = False
+        self.viz_callback = None
+
+    def run(self, verbose: bool = True, real_time_viz: bool = False,
+            viz_callback: Optional[Callable] = None) -> Dict:
         """
         Run the genetic algorithm
 
         Args:
             verbose: Whether to print progress information
+            real_time_viz: Enable real-time visualization
+            viz_callback: Custom visualization callback function
 
         Returns:
             Dictionary with results and statistics
         """
         start_time = time.time()
+
+        # Set up visualization
+        self.real_time_viz = real_time_viz
+        self.viz_callback = viz_callback
+
+        if real_time_viz and self.coordinates is not None:
+            plt.ion()  # Enable interactive mode
+            self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            self.fig.suptitle('Real-time GA Evolution for TSP')
 
         # Initialize population
         population = self.operators.create_initial_population(
@@ -87,6 +108,14 @@ class GeneticAlgorithmTSP:
             # Track statistics
             self._update_statistics(population, fitness_scores)
 
+            # Real-time visualization
+            if self.real_time_viz and self.coordinates is not None and generation % 5 == 0:
+                self._update_real_time_visualization(generation)
+
+            # Custom visualization callback
+            if self.viz_callback:
+                self.viz_callback(self, generation, population, fitness_scores)
+
             # Check for convergence
             if self._check_convergence():
                 if verbose:
@@ -104,6 +133,11 @@ class GeneticAlgorithmTSP:
         end_time = time.time()
         execution_time = end_time - start_time
 
+        # Close real-time visualization
+        if self.real_time_viz and self.coordinates is not None:
+            plt.ioff()
+            plt.show()
+
         if verbose:
             print(f"Algorithm completed in {execution_time:.2f} seconds")
             print(f"Best tour distance: {self.best_fitness:.2f}")
@@ -115,6 +149,7 @@ class GeneticAlgorithmTSP:
             'generations': self.generation_count + 1,
             'best_fitness_history': self.best_fitness_history,
             'avg_fitness_history': self.avg_fitness_history,
+            'best_tour_history': self.best_tour_history,
             'convergence_generation': self.generation_count if self.convergence_count >= self.convergence_threshold else None
         }
 
@@ -142,6 +177,10 @@ class GeneticAlgorithmTSP:
             self.convergence_count = 0
         else:
             self.convergence_count += 1
+
+        # Track best tour for this generation
+        best_idx = fitness_scores.index(current_best_fitness)
+        self.best_tour_history.append(population[best_idx].copy())
 
     def _check_convergence(self) -> bool:
         """Check if algorithm has converged"""
@@ -226,6 +265,7 @@ class GeneticAlgorithmTSP:
             self.best_tour = None
             self.best_fitness_history = []
             self.avg_fitness_history = []
+            self.best_tour_history = []
             self.convergence_count = 0
 
             # Run algorithm
@@ -257,3 +297,51 @@ class GeneticAlgorithmTSP:
             'all_results': results,
             'success_rate': sum(1 for r in results if r['convergence_generation'] is not None) / num_runs
         }
+
+    def _update_real_time_visualization(self, generation: int):
+        """Update real-time visualization during GA execution"""
+        if self.coordinates is None:
+            return
+
+        # Clear previous plots
+        self.ax1.clear()
+        self.ax2.clear()
+
+        # Plot convergence (left panel)
+        self.ax1.plot(self.best_fitness_history, 'b-', label='Best Fitness', linewidth=2)
+        self.ax1.plot(self.avg_fitness_history, 'r--', label='Avg Fitness', alpha=0.7)
+        self.ax1.set_title(f'Convergence - Generation {generation}')
+        self.ax1.set_xlabel('Generation')
+        self.ax1.set_ylabel('Fitness (Distance)')
+        self.ax1.legend()
+        self.ax1.grid(True, alpha=0.3)
+
+        # Plot current best tour (right panel)
+        if self.best_tour is not None:
+            self._plot_tour_on_axis(self.ax2, self.best_tour,
+                                   f'Best Tour - Gen {generation}\nDistance: {self.best_fitness:.2f}')
+
+        # Update display
+        plt.pause(0.01)
+
+    def _plot_tour_on_axis(self, ax, tour: List[int], title: str):
+        """Plot tour on given axis"""
+        # Extract coordinates
+        x_coords = [self.coordinates[i][1] for i in range(len(self.coordinates))]
+        y_coords = [self.coordinates[i][2] for i in range(len(self.coordinates))]
+
+        # Plot cities
+        ax.scatter(x_coords, y_coords, c='red', s=30, zorder=2)
+
+        # Plot tour
+        tour_x = [x_coords[city] for city in tour] + [x_coords[tour[0]]]
+        tour_y = [y_coords[city] for city in tour] + [y_coords[tour[0]]]
+        ax.plot(tour_x, tour_y, 'b-', linewidth=1.5, alpha=0.8, zorder=1)
+
+        # Mark start city
+        ax.scatter(x_coords[tour[0]], y_coords[tour[0]], c='green', s=60, marker='s', zorder=3)
+
+        ax.set_title(title)
+        ax.set_xlabel('X Coordinate')
+        ax.set_ylabel('Y Coordinate')
+        ax.grid(True, alpha=0.3)
